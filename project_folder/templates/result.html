@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Результаты теста</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Результаты теста</h1>
+        <!-- Результаты будут вставлены сюда через JavaScript после отправки теста -->
+        <p id="loadingMessage">Загрузка результатов...</p>
+    </div>
+    <!-- Этот скрипт нужен, если вы будете рендерить result.html напрямую и передавать туда данные -->
+    <!-- Но в текущей реализации он не используется, так как результаты отображаются на test.html -->
+    <!-- Однако, если вы решите передавать данные через URL или sessionStorage, он может понадобиться -->
+    <!--
+    <script>
+        // Пример получения данных из sessionStorage (если они были сохранены на test.html)
+        const results = JSON.parse(sessionStorage.getItem('testResults'));
+        if (results) {
+            document.getElementById('loadingMessage').style.display = 'none';
+            displayResults(results);
+        } else {
+            document.getElementById('loadingMessage').textContent = 'Результаты не найдены.';
+        }
+
+        function displayResults(data) {
+            const container = document.querySelector('.container');
+            container.innerHTML = `
+                <h1>Результаты теста</h1>
+                <p>Правильных ответов: ${data.correct_count} из ${data.total_count}</p>
+                <p>Процент: ${data.score.toFixed(2)}%</p>
+                <h2>Детализация:</h2>
+                <div id="detailedResults">
+                    ${data.detailed_results.map((res, index) => `
+                        <div class="result-item ${res.is_correct ? 'correct' : 'incorrect'}">
+                            <h4>${index + 1}. ${res.question}</h4>
+                            <p>Ваш ответ: ${res.options[res.user_index]}</p>
+                            <p>Правильный ответ: ${res.options[res.correct_index]}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    </script>
+    -->
+</body>
+</html>
