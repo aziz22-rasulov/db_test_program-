@@ -1,4 +1,3 @@
-
 import streamlit as st
 import json
 import random
@@ -8,11 +7,25 @@ import time
 # ===================== ЗАГРУЗКА ДАННЫХ =====================
 @st.cache_data
 def load_data():
-    with open("db_test_66.json", "r", encoding="utf-8") as f:
-        return json.load(f)
+    # Используем имя файла, соответствующее вашему новому JSON
+    with open("db_test_data.json", "r", encoding="utf-8") as f:
+        # Если JSON не обёрнут в {"cards": [...]}, загружаем напрямую
+        data = json.load(f)
+        # Предполагаем, что data - это список словарей
+        if isinstance(data, list) and len(data) > 0 and 'question' in data[0]:
+            return data
+        # Если JSON обёрнут в {"cards": [...]}, как в примере из файла Pasted_Text_1763202972036.txt
+        elif isinstance(data, dict) and 'cards' in data:
+            return data['cards']
+        else:
+            st.error("Неправильный формат JSON файла. Ожидается список вопросов или {'cards': [...]}.")
+            return []
 
-data = load_data()
-cards = data["cards"]
+cards = load_data()
+
+if not cards:
+    st.error("Нет доступных вопросов для теста.")
+    st.stop()
 
 
 # ===================== НАСТРОЙКИ =====================
@@ -48,8 +61,9 @@ if mode == "Учебник":
     st.success("Правильный ответ:")
     st.write(q["options"][q["correct"]])
 
-    st.info("Объяснение:")
-    st.write(q["options"][q["correct"]])
+    # Объяснение можно добавить, если оно есть в JSON, например, как отдельное поле
+    # st.info("Объяснение:")
+    # st.write(q.get("explanation", "Объяснение отсутствует."))
 
     st.write("---")
     st.caption("Используйте меню слева, чтобы перейти в режим экзамена.")
@@ -81,9 +95,11 @@ else:
             st.session_state.answers = {}
             st.session_state.time_per_question = {}
             st.session_state.start_time = time.time()
+            # Перемешиваем индексы вопросов из cards
             st.session_state.order = list(range(len(cards)))
             random.shuffle(st.session_state.order)
-            st.experimental_rerun()
+            # st.rerun() предпочтительнее для новых версий Streamlit
+            st.rerun()
         st.stop()
 
     # ---------- Завершение экзамена ----------
@@ -97,24 +113,33 @@ else:
         st.write("## 📘 Подробный отчёт")
 
         for i, user_answer in st.session_state.answers.items():
-            q = cards[i]
+            # Используем перемешанный индекс, чтобы получить правильный вопрос
+            q_original_index = st.session_state.order[i]
+            q = cards[q_original_index]
 
-            st.write(f"### Вопрос {i+1}: {q['question']}")
+            st.write(f"### Вопрос {q['id']}: {q['question']}")
             st.write(f"Ваш ответ: {q['options'][user_answer]}")
             st.write(f"Правильный: {q['options'][q['correct']]}")
-            st.write(f"⏱ Время на вопрос: {st.session_state.time_per_question[i]} сек")
+            # Время для *этого* вопроса (по индексу в экзамене i) - может не совпадать с q_original_index
+            # Нужно использовать i для доступа к времени, так как оно сохранялось по порядку ответов
+            st.write(f"⏱ Время на вопрос: {st.session_state.time_per_question.get(i, 0)} сек")
             st.write("---")
 
         if st.button("Пройти снова"):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.experimental_rerun()
+            # Сбрасываем только состояние экзамена
+            keys_to_clear = ["exam_started", "current", "score", "answers", "start_time", "time_per_question", "order"]
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
+            # st.rerun() предпочтительнее для новых версий Streamlit
+            st.rerun()
 
         st.stop()
 
     # ---------- Текущий вопрос ----------
-    q_index = st.session_state.order[st.session_state.current]
-    question = cards[q_index]
+    # Получаем индекс вопроса из перемешанного списка
+    q_index_in_cards = st.session_state.order[st.session_state.current]
+    question = cards[q_index_in_cards]
 
     st.write(f"Вопрос {st.session_state.current + 1} из {len(cards)}")
 
@@ -127,23 +152,38 @@ else:
     st.write("### " + question["question"])
 
     # Перемешивание вариантов
-    shuffled = list(range(4))
-    random.shuffle(shuffled)
+    # Создаём список индексов для options и перемешиваем их
+    option_indices = list(range(len(question["options"])))
+    random.shuffle(option_indices)
 
-    choice = st.radio("Выберите ответ:", shuffled,
-                      format_func=lambda x: question["options"][x])
+    # Используем radio с перемешанными индексами
+    choice_idx_in_shuffled = st.radio(
+        "Выберите ответ:",
+        options=option_indices,
+        format_func=lambda x: question["options"][x],
+        key=f"q_{st.session_state.current}" # Уникальный ключ для каждого вопроса
+    )
 
     if st.button("Ответить"):
-        # Засекаем время
-        st.session_state.time_per_question[q_index] = int(time.time() - question_start)
-        st.session_state.answers[q_index] = choice
+        # Проверяем, был ли выбран ответ
+        if choice_idx_in_shuffled is not None:
+            # Засекаем время
+            # Сохраняем время по индексу в *экзамене* (st.session_state.current), а не по индексу в cards
+            st.session_state.time_per_question[st.session_state.current] = int(time.time() - question_start)
+            # Сохраняем выбранный *индекс* варианта из *оригинального* вопроса
+            st.session_state.answers[st.session_state.current] = choice_idx_in_shuffled
 
-        if choice == question["correct"]:
-            st.success("Правильно!")
-            st.session_state.score += 1
+            if choice_idx_in_shuffled == question["correct"]:
+                st.success("Правильно!")
+                st.session_state.score += 1
+            else:
+                st.error("Неверно!")
+                st.write(f"Правильный ответ: {question['options'][question['correct']]}")
+
+            # Кнопка "Следующий" появляется после "Ответить"
+            if st.button("Следующий"):
+                st.session_state.current += 1
+                # st.rerun() предпочтительнее для новых версий Streamlit
+                st.rerun()
         else:
-            st.error("Неверно!")
-
-        if st.button("Следующий"):
-            st.session_state.current += 1
-            st.experimental_rerun()
+            st.warning("Пожалуйста, выберите ответ.")
