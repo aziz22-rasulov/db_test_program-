@@ -5,7 +5,7 @@ import random
 import os
 
 # --- Загрузка данных ---
-TEST_DATA_FILE = 'db_test_data.json'
+TEST_DATA_FILE = 'db_test_data.json' # Убедитесь, что имя файла совпадает
 
 @st.cache_data
 def load_test_data():
@@ -16,6 +16,12 @@ def load_test_data():
     try:
         with open(TEST_DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        # Предполагаем, что JSON имеет структуру: [{"id": ..., "question": ..., "options": [...], "correct": ...}, ...]
+        # или [{"question": ..., "options": [...], "correct": ...}, ...]
+        # Проверим первый элемент
+        if not data or 'question' not in data[0] or 'options' not in data[0] or 'correct' not in data[0]:
+             st.error(f"Файл {TEST_DATA_FILE} имеет неправильный формат. Ожидается список словарей с ключами 'question', 'options', 'correct'.")
+             return []
         return data
     except json.JSONDecodeError:
         st.error(f"Ошибка при чтении JSON из файла {TEST_DATA_FILE}")
@@ -76,7 +82,8 @@ elif st.session_state.state == 'study':
     # Показываем *все* варианты, подсвечивая правильный
     st.write("**Варианты ответа:**")
     for i, opt in enumerate(current_q['options']):
-        if i == current_q['correct_answer_index']:
+        # Используем 'correct' для определения правильного ответа
+        if i == current_q['correct']:
             st.write(f"**✅ Правильный ответ:** {opt}")
         else:
             st.write(f"❌ {opt}")
@@ -123,7 +130,7 @@ elif st.session_state.state == 'test_setup':
             random.shuffle(options_with_index)
             shuffled_options = [item[1] for item in options_with_index]
             # Новый индекс правильного ответа после перемешивания
-            original_correct_index = q['correct_answer_index']
+            original_correct_index = q['correct'] # Используем 'correct' из исходного JSON
             new_correct_index = next(i for i, (idx, opt) in enumerate(options_with_index) if idx == original_correct_index)
             q['shuffled_options'] = shuffled_options
             q['new_correct_index'] = new_correct_index
@@ -197,6 +204,12 @@ elif st.session_state.state == 'test':
     # Кнопка возврата в меню
     if st.button("Вернуться в меню"):
         st.session_state.state = 'menu'
+        st.session_state.questions = []
+        st.session_state.user_answers = []
+        st.session_state.score = 0
+        st.session_state.correct_count = 0
+        st.session_state.total_count = 0
+        st.session_state.detailed_results = []
         st.rerun()
 
 elif st.session_state.state == 'result':
