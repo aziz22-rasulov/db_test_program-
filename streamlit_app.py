@@ -26,54 +26,125 @@ def load_test_data():
 
 # --- Инициализация состояния сессии ---
 if 'state' not in st.session_state:
-    st.session_state.state = 'start'  # Возможные состояния: 'start', 'test', 'result'
+    st.session_state.state = 'menu'  # Возможные состояния: 'menu', 'study', 'test', 'result'
     st.session_state.questions = []
     st.session_state.user_answers = []
     st.session_state.score = 0
     st.session_state.correct_count = 0
     st.session_state.total_count = 0
     st.session_state.detailed_results = []
+    st.session_state.num_questions = 10 # Количество вопросов по умолчанию для экзамена
+    st.session_state.current_question_index = 0 # Индекс текущего вопроса в режиме заучивания
+
+# --- Загрузка данных ---
+all_questions = load_test_data()
+total_questions = len(all_questions)
+
+if total_questions == 0:
+    st.error("Нет доступных вопросов для теста.")
+    st.stop() # Останавливаем выполнение, если нет вопросов
 
 # --- Заголовок приложения ---
 st.title("Тест по Базам Данных")
 
-# --- Логика приложения в зависимости от состояния ---
-if st.session_state.state == 'start':
-    # Страница выбора количества вопросов
-    all_questions = load_test_data()
-    total_questions = len(all_questions)
+# --- Меню выбора режима ---
+if st.session_state.state == 'menu':
+    st.subheader("Выберите режим:")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Режим заучивания"):
+            st.session_state.state = 'study'
+            st.session_state.current_question_index = 0 # Сброс индекса при входе в режим заучивания
+            st.rerun()
+    with col2:
+        if st.button("Мини-экзамен"):
+            st.session_state.state = 'test_setup' # Переход к настройке экзамена
+            st.rerun()
 
-    if total_questions == 0:
-        st.error("Нет доступных вопросов для теста.")
-    else:
-        st.write(f"Всего доступно вопросов: {total_questions}")
-        num_questions = st.number_input("Выберите количество вопросов для теста:", min_value=1, max_value=total_questions, value=10, step=1)
+# --- Режим заучивания ---
+elif st.session_state.state == 'study':
+    st.subheader("Режим заучивания")
+    st.write(f"Всего вопросов: {total_questions}")
 
-        if st.button("Начать тест"):
-            # Выбираем случайные вопросы
-            selected_questions = random.sample(all_questions, min(num_questions, total_questions))
+    # Выбор конкретного вопроса
+    selected_index = st.selectbox("Выберите номер вопроса:", options=range(1, total_questions + 1), index=st.session_state.current_question_index)
+    st.session_state.current_question_index = selected_index - 1 # Обновляем индекс в состоянии
 
-            # Перемешиваем варианты ответов для каждого вопроса
-            for q in selected_questions:
-                options_with_index = list(enumerate(q['options']))
-                random.shuffle(options_with_index)
-                shuffled_options = [item[1] for item in options_with_index]
-                # Новый индекс правильного ответа после перемешивания
-                original_correct_index = q['correct_answer_index']
-                new_correct_index = next(i for i, (idx, opt) in enumerate(options_with_index) if idx == original_correct_index)
-                q['shuffled_options'] = shuffled_options
-                q['new_correct_index'] = new_correct_index
+    # Отображение выбранного вопроса и ответа
+    current_q = all_questions[st.session_state.current_question_index]
+    st.markdown(f"**Вопрос {st.session_state.current_question_index + 1}:** {current_q['question']}")
+    # Показываем *все* варианты, подсвечивая правильный
+    st.write("**Варианты ответа:**")
+    for i, opt in enumerate(current_q['options']):
+        if i == current_q['correct_answer_index']:
+            st.write(f"**✅ Правильный ответ:** {opt}")
+        else:
+            st.write(f"❌ {opt}")
 
-            st.session_state.questions = selected_questions
-            st.session_state.user_answers = [None] * len(selected_questions) # Инициализируем список ответов
-            st.session_state.state = 'test'
-            st.rerun() # Перезапускаем скрипт для отображения теста
+    # Кнопки навигации
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if st.button("Предыдущий", disabled=(st.session_state.current_question_index == 0)):
+            st.session_state.current_question_index -= 1
+            st.rerun()
+    with col3:
+        if st.button("Следующий", disabled=(st.session_state.current_question_index == total_questions - 1)):
+            st.session_state.current_question_index += 1
+            st.rerun()
 
+    # Кнопка возврата в меню
+    if st.button("Вернуться в меню"):
+        st.session_state.state = 'menu'
+        st.rerun()
+
+# --- Настройка мини-экзамена ---
+elif st.session_state.state == 'test_setup':
+    st.subheader("Настройка мини-экзамена")
+    st.write(f"Всего доступно вопросов: {total_questions}")
+
+    # Используем session_state для хранения выбранного количества вопросов
+    num_questions = st.number_input(
+        "Выберите количество вопросов для экзамена:",
+        min_value=1,
+        max_value=total_questions,
+        value=st.session_state.num_questions, # Используем значение из session_state
+        step=1
+    )
+    # Сохраняем выбор в session_state
+    st.session_state.num_questions = num_questions
+
+    if st.button("Начать мини-экзамен"):
+        # Выбираем случайные вопросы
+        selected_questions = random.sample(all_questions, min(num_questions, total_questions))
+
+        # Перемешиваем варианты ответов для каждого вопроса
+        for q in selected_questions:
+            options_with_index = list(enumerate(q['options']))
+            random.shuffle(options_with_index)
+            shuffled_options = [item[1] for item in options_with_index]
+            # Новый индекс правильного ответа после перемешивания
+            original_correct_index = q['correct_answer_index']
+            new_correct_index = next(i for i, (idx, opt) in enumerate(options_with_index) if idx == original_correct_index)
+            q['shuffled_options'] = shuffled_options
+            q['new_correct_index'] = new_correct_index
+
+        st.session_state.questions = selected_questions
+        st.session_state.user_answers = [None] * len(selected_questions) # Инициализируем список ответов
+        st.session_state.state = 'test'
+        st.rerun() # Перезапускаем скрипт для отображения теста
+
+    # Кнопка возврата в меню
+    if st.button("Вернуться в меню"):
+        st.session_state.state = 'menu'
+        st.rerun()
+
+# --- Режим мини-экзамена ---
 elif st.session_state.state == 'test':
     # Страница прохождения теста
     questions = st.session_state.questions
     user_answers = st.session_state.user_answers
 
+    st.subheader("Мини-экзамен")
     st.write(f"Вопросы: {len(questions)}")
 
     # Отображаем каждый вопрос и варианты ответов
@@ -91,7 +162,7 @@ elif st.session_state.state == 'test':
         user_answers[i] = selected_option
 
     # Кнопка отправки теста
-    if st.button("Завершить тест"):
+    if st.button("Завершить экзамен"):
         correct_count = 0
         detailed_results = []
 
@@ -123,9 +194,14 @@ elif st.session_state.state == 'test':
         st.session_state.state = 'result'
         st.rerun() # Перезапускаем скрипт для отображения результатов
 
+    # Кнопка возврата в меню
+    if st.button("Вернуться в меню"):
+        st.session_state.state = 'menu'
+        st.rerun()
+
 elif st.session_state.state == 'result':
     # Страница результатов
-    st.header("Результаты теста")
+    st.header("Результаты мини-экзамена")
     st.metric("Правильных ответов", f"{st.session_state.correct_count} из {st.session_state.total_count}")
     st.metric("Процент", f"{st.session_state.score:.2f}%")
 
@@ -137,14 +213,20 @@ elif st.session_state.state == 'result':
             st.write(f"**Правильный ответ:** {res['correct_text']}")
         st.markdown("---") # Разделитель между вопросами
 
-    # Кнопка "Новый тест"
-    if st.button("Пройти тест снова"):
-        # Сбрасываем состояние
-        st.session_state.state = 'start'
+    # Кнопка "Новый экзамен"
+    if st.button("Пройти мини-экзамен снова"):
+        # Сбрасываем состояние только для экзамена и результатов
+        st.session_state.state = 'test_setup' # Возвращаемся к настройке экзамена
         st.session_state.questions = []
         st.session_state.user_answers = []
         st.session_state.score = 0
         st.session_state.correct_count = 0
         st.session_state.total_count = 0
         st.session_state.detailed_results = []
-        st.rerun() # Перезапускаем скрипт для возврата на старт
+        # num_questions остается тем же, что и было выбрано последним
+        st.rerun() # Перезапускаем скрипт
+
+    # Кнопка "Вернуться в меню"
+    if st.button("Вернуться в меню"):
+        st.session_state.state = 'menu'
+        st.rerun()
