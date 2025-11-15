@@ -3,6 +3,11 @@ import json
 import random
 import time
 
+st.set_page_config(
+    page_title="Тест по базам данных",
+    layout="centered",
+    initial_sidebar_state="expanded"
+)
 
 # ===================== ЗАГРУЗКА ДАННЫХ =====================
 @st.cache_data
@@ -28,12 +33,7 @@ if not cards:
     st.stop()
 
 
-# ===================== НАСТРОЙКИ =====================
-st.set_page_config(
-    page_title="Тест по базам данных",
-    layout="centered",
-    initial_sidebar_state="expanded"
-)
+
 
 st.sidebar.title("Навигация")
 mode = st.sidebar.radio("Выберите режим:", ["Учебник", "Экзамен"])
